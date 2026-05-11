@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+title: "Reproducible total microcystin prediction workflow"
+message: "If you use this repository, please cite the archived release DOI."
+type: software
+authors:
+  - family-names: "Replace with author family name"
+    given-names: "Replace with author given name"
+version: "0.1.0"
+date-released: "2026-05-11"
+repository-code: "https://github.com/REPLACE-OWNER/REPLACE-REPOSITORY"
+license: MIT

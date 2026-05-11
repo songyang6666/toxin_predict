@@ -1,0 +1,29 @@
+[project]
+name = "ml-toxin-predict"
+version = "0.1.0"
+description = "Reproducible one-week total microcystin prediction workflow."
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "pandas",
+  "openpyxl",
+  "scipy",
+  "scikit-learn",
+  "matplotlib",
+  "shap",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+
+[project.scripts]
+toxin-predict = "ml_toxin_predict.cli:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
