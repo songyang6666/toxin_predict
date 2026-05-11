@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 from sklearn.ensemble import IsolationForest
 from sklearn.impute import KNNImputer
 
@@ -89,12 +88,6 @@ def remove_column_outliers(
 def impute_knn(df: pd.DataFrame, n_neighbors: int = 5) -> pd.DataFrame:
     imputer = KNNImputer(n_neighbors=n_neighbors)
     return pd.DataFrame(imputer.fit_transform(df), columns=df.columns, index=df.index)
-
-
-def remove_rows_by_z_score(df: pd.DataFrame, threshold: float = 3.0) -> pd.DataFrame:
-    z_scores = np.abs(stats.zscore(df, nan_policy="omit"))
-    outliers = np.nan_to_num(z_scores, nan=0.0) > threshold
-    return df[~outliers.any(axis=1)]
 
 
 def prepare_numeric_features(

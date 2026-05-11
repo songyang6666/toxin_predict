@@ -1,4 +1,4 @@
-# Total Microcystin Predict Workflow
+# Total Microcystin Prediction Workflow
 
 This repository contains the reproducible Python workflow for the one-week
 total microcystin prediction originally developed in
@@ -6,7 +6,7 @@ total microcystin prediction originally developed in
 Chla-only experiments so the public repository stays focused on the toxin
 analysis used for publication.
 
-## What is included
+## Repository Layout
 
 ```text
 ML_toxin_Collection_Kfold3_predict2.py   Legacy-name compatibility entry point
@@ -15,7 +15,7 @@ src/ml_toxin_predict/                    Installable Python package
 data/raw/                                 Required source workbook
 data/processed/                           Optional generated intermediate data
 data/outputs/                             Generated metrics, predictions, plots
-docs/                                     Structure and WRR/AGU notes
+docs/                                     WRR/AGU open research notes
 tests/                                    Lightweight dataset smoke test
 ```
 

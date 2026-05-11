@@ -7,7 +7,6 @@ dependencies = [
   "numpy",
   "pandas",
   "openpyxl",
-  "scipy",
   "scikit-learn",
   "matplotlib",
   "shap",
