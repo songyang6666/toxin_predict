@@ -1,11 +1,16 @@
 cff-version: 1.2.0
 title: "Reproducible total microcystin prediction workflow"
-message: "If you use this repository, please cite the archived release DOI."
+message: "If you use this repository, please cite the archived release DOI and associated manuscript."
 type: software
 authors:
-  - family-names: "Replace with author family name"
-    given-names: "Replace with author given name"
+  - family-names: "Song"
+    given-names: "Yang"
+    orcid: "https://orcid.org/0000-0002-7120-4583"
+    affiliation: "Independent Researcher"
 version: "0.1.0"
 date-released: "2026-05-11"
-repository-code: "https://github.com/REPLACE-OWNER/REPLACE-REPOSITORY"
+repository-code: "https://github.com/songyang6666/toxin_predict"
 license: MIT
+contact:
+  - name: "Yang Song"
+    email: "songyangscu@hotmail.com"

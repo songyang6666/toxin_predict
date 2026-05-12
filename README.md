@@ -25,8 +25,8 @@ Clone the repository, create a virtual environment, install the package in
 editable mode, and run the prediction workflow:
 
 ```bash
-git clone https://github.com/YOUR-USER/YOUR-REPO.git
-cd YOUR-REPO
+git clone https://github.com/songyang6666/toxin_predict.git
+cd toxin_predict
 
 python -m venv .venv
 source .venv/bin/activate
@@ -106,10 +106,28 @@ pytest -q
 
 GitHub Actions runs the same smoke checks on push and pull request.
 
+## Author
+
+This repository was developed by Yang Song, Independent Researcher.
+
+- ORCID: https://orcid.org/0000-0002-7120-4583
+- Contact: songyangscu@hotmail.com
+
+## Citation
+
+If you use or adapt this workflow, please cite the archived software release DOI
+and the associated manuscript when they become available. Citation metadata are
+provided in `CITATION.cff`.
+
+## License
+
+The analysis code is released under the MIT License. The underlying NOAA data
+are governed by their original public data terms and should be cited separately.
+
 ## Data and software availability
 
 For Water Resources Research / AGU submission, archive a release of this
-repository in Zenodo or a similar trusted repository and replace the placeholder
-metadata in `CITATION.cff`. The source data should also be deposited or cited in
-an appropriate repository, preferably with a DOI. See
+repository in Zenodo or a similar trusted repository, then add the final
+software DOI to the citation metadata. The source data should also be deposited
+or cited in an appropriate repository, preferably with a DOI. See
 `docs/WRR_OPEN_RESEARCH.md`.

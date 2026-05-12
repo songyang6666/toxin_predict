@@ -22,8 +22,7 @@ workflow and the data file used by that workflow.
 - Archive the data in a community-accepted, institutional, or generalist
   repository with a DOI where possible.
 - Add formal data and software citations to the manuscript reference list.
-- Replace placeholder author, repository, DOI, and license details in
-  `CITATION.cff` and this document.
+- Add the final repository DOI and manuscript citation after acceptance.
 
 ## Draft availability statement
 
