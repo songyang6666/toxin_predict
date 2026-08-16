@@ -11,7 +11,26 @@ def interpolate_daily_within_year(
     date_column: str = "Time",
     sort_dates: bool = False,
     include_source_date_column: bool = False,
+    group_column: str | None = None,
 ) -> pd.DataFrame:
+    if group_column is not None:
+        if group_column not in df.columns:
+            raise KeyError(f"No grouping column named {group_column!r}")
+
+        interpolated_groups = []
+        for group_value, group in df.groupby(group_column, sort=False, dropna=False):
+            interpolated = interpolate_daily_within_year(
+                group.drop(columns=[group_column]),
+                date_column=date_column,
+                sort_dates=sort_dates,
+                include_source_date_column=include_source_date_column,
+            )
+            interpolated.insert(1, group_column, group_value)
+            interpolated_groups.append(interpolated)
+        if not interpolated_groups:
+            return pd.DataFrame(columns=["Date", group_column])
+        return pd.concat(interpolated_groups, ignore_index=True)
+
     data = df.copy()
     data[date_column] = pd.to_datetime(data[date_column], format="%m/%d/%Y", errors="coerce")
     data = data.dropna(subset=[date_column])
@@ -61,12 +80,18 @@ def add_shifted_target(
     date_column: str = "Date",
     output_column: str | None = None,
     drop_all_na: bool = False,
+    group_column: str | None = None,
 ) -> pd.DataFrame:
     output_column = output_column or f"{target_column}_next_{horizon_days}_days"
     data = df.copy()
     data[output_column] = data[target_column].shift(-horizon_days)
     year = pd.to_datetime(data[date_column]).dt.year
-    data.loc[year != year.shift(-horizon_days), output_column] = np.nan
+    valid_target = year == year.shift(-horizon_days)
+    if group_column is not None:
+        if group_column not in data.columns:
+            raise KeyError(f"No grouping column named {group_column!r}")
+        valid_target &= data[group_column] == data[group_column].shift(-horizon_days)
+    data.loc[~valid_target, output_column] = np.nan
     if drop_all_na:
         return data.dropna().reset_index(drop=True)
     return data.dropna(subset=[output_column]).reset_index(drop=True)

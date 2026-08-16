@@ -24,10 +24,16 @@ workflow and the data file used by that workflow.
 - Add formal data and software citations to the manuscript reference list.
 - Add the final repository DOI and manuscript citation after acceptance.
 
-## Draft availability statement
+## Draft Open Research statement for peer review
 
-The water-quality and microcystin data used for the total microcystin prediction
-are available in [repository name] at [DOI or persistent URL] under [license and
-access conditions]. The Python code used for preprocessing, KNN model training,
-evaluation, and SHAP-based interpretation is preserved at [software DOI] and
-developed openly at [GitHub URL] under the MIT License.
+The water-quality and microcystin data supporting this study are publicly
+available from the NOAA National Centers for Environmental Information at
+https://doi.org/10.25921/11da-3x54. The analysis was conducted using Python,
+scikit-learn, and SHAP. Custom scripts for preprocessing, model training and
+evaluation, prediction-horizon comparison, figure generation, and SHAP-based
+interpretation are available to editors and reviewers during peer review
+through a private GitHub repository:
+https://github.com/songyang6666/toxin_predict. Upon acceptance, the repository
+will be made public and archived in Zenodo or another trusted repository with a
+persistent DOI, and the final Open Research statement and reference list will
+be updated accordingly.

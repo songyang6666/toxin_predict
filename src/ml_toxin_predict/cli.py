@@ -7,52 +7,20 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from ml_toxin_predict.config import DEFAULT_WORKBOOK, OUTPUT_DIR, PROCESSED_DIR
-from ml_toxin_predict.datasets import BASE_FEATURES, TOXIN_FEATURES, extract_features, read_workbook_sheet
-from ml_toxin_predict.predicting import add_shifted_target, interpolate_daily_within_year
 from ml_toxin_predict.modeling import fit_knn_grid_search, knn_param_grid, write_json
-from ml_toxin_predict.preprocessing import prepare_numeric_features
-
-
-TOXIN_MODEL_FEATURES = [
-    "Total microcystin",
-    "Temp",
-    "Chla",
-    "Depth",
-    "Phycocyanin",
-    "Wind",
-    "DO",
-    "PAR",
-    "AMM",
-    "Cond",
-    "SD",
-    "NN",
-    "TP",
-    "SRP",
-    "TUR",
-]
+from ml_toxin_predict.workflow import build_horizon_dataset, prepare_daily_toxin_data
 
 
 def build_dataset(args: argparse.Namespace):
-    """Prepare the one-week total microcystin prediction dataset."""
-    raw = read_workbook_sheet(args.workbook, args.sheet)
-    extracted = extract_features(raw, TOXIN_FEATURES + BASE_FEATURES, include_date=True)
-    numeric, reports = prepare_numeric_features(
-        extracted.drop(columns=["Time"]),
+    """Prepare the total microcystin dataset for the requested horizon."""
+    daily, reports = prepare_daily_toxin_data(
+        Path(args.workbook),
+        args.sheet,
         outlier_contamination=args.outlier_contamination,
         impute_neighbors=args.impute_neighbors,
         random_state=args.random_state,
     )
-    prepared = extracted[["Time"]].join(numeric)
-    daily = interpolate_daily_within_year(prepared, date_column="Time")
-    daily["Total microcystin"] = daily["Dissolved Microcystin"] + daily["Particulate Microcystin"]
-    predict = add_shifted_target(
-        daily,
-        "Total microcystin",
-        horizon_days=args.horizon_days,
-        output_column="Total microcystin_next_week",
-    )
-    X = predict[TOXIN_MODEL_FEATURES]
-    y = predict["Total microcystin_next_week"]
+    X, y, predict = build_horizon_dataset(daily, args.horizon_days)
     return X, y, reports, daily, predict
 
 
@@ -82,7 +50,7 @@ def main(argv: list[str] | None = None) -> None:
 
     X, y, reports, daily, predict = build_dataset(args)
     param_grid = knn_param_grid()
-    best_model, scaler, test_metrics, predictions, metadata, cv_results = fit_knn_grid_search(
+    best_model, test_metrics, predictions, metadata, cv_results = fit_knn_grid_search(
         X,
         y,
         param_grid=param_grid,
@@ -95,6 +63,13 @@ def main(argv: list[str] | None = None) -> None:
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    prediction_dates = pd.to_datetime(
+        predict.loc[predictions["sample_index"], "Date"]
+    ).dt.strftime("%Y-%m-%d")
+    predictions.insert(1, "date", prediction_dates.to_numpy())
+    if "Site" in predict.columns:
+        prediction_sites = predict.loc[predictions["sample_index"], "Site"]
+        predictions.insert(2, "site", prediction_sites.to_numpy())
     predictions.to_csv(output_dir / "predictions.csv", index=False)
     cv_results.to_csv(output_dir / "cv_results.csv", index=False)
 
@@ -112,12 +87,9 @@ def main(argv: list[str] | None = None) -> None:
             test_size=args.test_size,
             random_state=args.random_state,
         )
-        scaler.fit(X_train)
-        X_test_scaled = scaler.transform(X_test)
-        X_test_scaled_df = pd.DataFrame(X_test_scaled, columns=X.columns, index=X_test.index)
         write_permutation_importance(
             best_model,
-            X_test_scaled,
+            X_test,
             y_test,
             list(X.columns),
             output_dir / "permutation_importance.csv",
@@ -125,8 +97,8 @@ def main(argv: list[str] | None = None) -> None:
         )
         write_shap_analysis(
             best_model,
-            X_test_scaled_df,
-            X.loc[X_test.index],
+            X_test,
+            X_test,
             output_dir / "shap",
             max_samples=args.shap_samples,
             random_state=args.random_state,
@@ -141,6 +113,7 @@ def main(argv: list[str] | None = None) -> None:
             "model": "KNeighborsRegressor",
             "sheet": args.sheet,
             "horizon_days": args.horizon_days,
+            "prediction_grouping": ["Site", "calendar_year"],
             "rows": len(X),
             "features": list(X.columns),
             "param_grid": param_grid,

@@ -25,3 +25,9 @@ jobs:
           test -f data/outputs/ci_smoke_test/metrics.json
           test -f data/outputs/ci_smoke_test/predictions.csv
           test -f data/outputs/ci_smoke_test/cv_results.csv
+      - name: Run horizon comparison smoke test
+        run: |
+          toxin-predict-horizons --horizons 1 --cv 2 --verbose 0 \
+            --output-dir data/outputs/ci_horizon_test
+          test -f data/outputs/ci_horizon_test/summary.csv
+          test -f data/outputs/ci_horizon_test/horizon_r2_rmse.png

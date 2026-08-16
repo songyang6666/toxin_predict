@@ -69,6 +69,7 @@ def extract_features(
     specs: list[FeatureSpec],
     *,
     include_date: bool = False,
+    include_site: bool = False,
 ) -> pd.DataFrame:
     columns = []
     if include_date:
@@ -76,6 +77,12 @@ def extract_features(
         if date_columns.empty:
             raise KeyError("No Date column found")
         columns.append(date_columns.iloc[:, 0].rename("Time"))
+
+    if include_site:
+        site_columns = df.filter(like="Site")
+        if site_columns.empty:
+            raise KeyError("No Site column found")
+        columns.append(site_columns.iloc[:, 0].rename("Site"))
 
     for spec in specs:
         columns.append(extract_first_matching_column(df, spec))

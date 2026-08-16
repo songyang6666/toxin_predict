@@ -52,8 +52,8 @@ def write_permutation_importance(
 
 def write_shap_analysis(
     model,
-    X_scaled_df: pd.DataFrame,
-    X_raw_df: pd.DataFrame,
+    X_model_df: pd.DataFrame,
+    X_display_df: pd.DataFrame,
     output_dir: Path,
     *,
     max_samples: int = 300,
@@ -68,13 +68,17 @@ def write_shap_analysis(
     distribution, optionally colored by another feature to reveal interactions.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    if len(X_scaled_df) > max_samples:
-        X_sample = X_scaled_df.sample(max_samples, random_state=random_state)
+    if len(X_model_df) > max_samples:
+        X_sample = X_model_df.sample(max_samples, random_state=random_state)
     else:
-        X_sample = X_scaled_df.copy()
-    X_raw_sample = X_raw_df.loc[X_sample.index]
+        X_sample = X_model_df.copy()
+    X_display_sample = X_display_df.loc[X_sample.index]
 
-    explainer = shap.KernelExplainer(model.predict, X_sample)
+    def predict(values):
+        frame = pd.DataFrame(values, columns=X_sample.columns)
+        return model.predict(frame)
+
+    explainer = shap.KernelExplainer(predict, X_sample)
     shap_values = explainer(X_sample)
     shap_frame = pd.DataFrame(shap_values.values, columns=X_sample.columns, index=X_sample.index)
     shap_frame.to_csv(output_dir / "shap_values.csv", index_label="sample_index")
@@ -92,7 +96,7 @@ def write_shap_analysis(
     y = shap_frame[feature]
 
     fig, ax = plt.subplots(figsize=(6, 5))
-    ax.scatter(X_raw_sample[feature], y, s=20, alpha=0.75)
+    ax.scatter(X_display_sample[feature], y, s=20, alpha=0.75)
     ax.axhline(0, color="gray", linestyle="--", linewidth=1.0)
     ax.set_xlabel(feature)
     ax.set_ylabel("SHAP value")
@@ -102,9 +106,9 @@ def write_shap_analysis(
 
     fig, ax = plt.subplots(figsize=(6.5, 5))
     scatter = ax.scatter(
-        X_raw_sample[feature],
+        X_display_sample[feature],
         y,
-        c=X_raw_sample[color_feature],
+        c=X_display_sample[color_feature],
         s=24,
         alpha=0.8,
         cmap="plasma",

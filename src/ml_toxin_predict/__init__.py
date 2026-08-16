@@ -5,7 +5,9 @@ __all__ = [
     "cli",
     "datasets",
     "explainability",
-    "predicting",
+    "horizons",
     "modeling",
+    "predicting",
     "preprocessing",
+    "workflow",
 ]

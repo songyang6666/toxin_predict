@@ -11,6 +11,7 @@ analysis used for publication.
 ```text
 ML_toxin_Collection_Kfold3_predict2.py   Legacy-name compatibility entry point
 run_toxin_predict.py                     Script entry point
+compare_toxin_predict_horizons.py        One-to-seven-day comparison entry point
 src/ml_toxin_predict/                    Installable Python package
 data/raw/                                 Required source workbook
 data/processed/                           Optional generated intermediate data
@@ -61,17 +62,48 @@ By default, the workflow:
   detection limit;
 - removes column outliers with Isolation Forest;
 - imputes missing values with KNN imputation;
-- linearly interpolates observations to daily values within each calendar year;
+- linearly interpolates observations to daily values within each monitoring
+  site and calendar year;
 - predicts total microcystin seven days ahead;
+- prevents shifted targets from crossing site or calendar-year boundaries;
 - uses the model inputs from the legacy toxin script, including current total
   microcystin, Chla, phycocyanin, nutrients, and physical variables;
 - trains a KNN regressor using an 80/20 random train/test split;
 - tunes `n_neighbors`, `weights`, and `p` with 5-fold `GridSearchCV`;
+- fits standardization independently within every cross-validation fold using a
+  scikit-learn `Pipeline`;
 - writes metrics, predictions, and cross-validation results to
   `data/outputs/toxin_predict/`.
 
 Single-process grid search is the default for portability. Use `--n-jobs -1` on
 systems that support parallel joblib execution.
+
+## Compare prediction horizons
+
+Run the reproducible 1-7 day comparison with:
+
+```bash
+toxin-predict-horizons --horizons 1 2 3 4 5 6 7
+```
+
+The equivalent repository script is:
+
+```bash
+python compare_toxin_predict_horizons.py
+```
+
+The comparison reuses one cleaned and daily-interpolated dataset for all seven
+horizons. It writes a summary table, a JSON record, an R2/RMSE comparison plot,
+and complete metrics, predictions, and cross-validation results for each
+horizon under `data/outputs/horizon_1_7_comparison/`.
+
+Prediction CSV files include the source row index, date, and monitoring site so
+held-out samples can be traced back to the processed dataset.
+
+The default random split reproduces the legacy workflow. Because daily
+interpolation creates temporally related samples, these scores should be
+reported with that design choice clearly stated and interpreted alongside an
+appropriate temporal sensitivity analysis.
 
 ## Optional processed data and interpretation outputs
 

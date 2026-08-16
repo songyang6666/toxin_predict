@@ -7,6 +7,7 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 
@@ -41,7 +42,7 @@ def fit_knn_grid_search(
     n_jobs: int = 1,
     verbose: int = 1,
 ):
-    """Fit the KNN prediction model with train/test split and GridSearchCV."""
+    """Fit KNN with scaling performed independently inside each CV fold."""
     X_train, X_test, y_train, y_test = train_test_split(
         X,
         y,
@@ -49,41 +50,57 @@ def fit_knn_grid_search(
         random_state=random_state,
     )
 
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    pipeline = Pipeline(
+        [
+            ("scaler", StandardScaler()),
+            ("model", KNeighborsRegressor()),
+        ]
+    )
+    pipeline_param_grid = {
+        f"model__{parameter}": values for parameter, values in param_grid.items()
+    }
 
     grid_search = GridSearchCV(
-        estimator=KNeighborsRegressor(),
-        param_grid=param_grid,
+        estimator=pipeline,
+        param_grid=pipeline_param_grid,
         cv=cv,
         scoring="neg_mean_squared_error",
         n_jobs=n_jobs,
         return_train_score=True,
         verbose=verbose,
     )
-    grid_search.fit(X_train_scaled, y_train)
-    best_model = grid_search.best_estimator_
+    grid_search.fit(X_train, y_train)
+    best_pipeline = grid_search.best_estimator_
 
-    y_train_pred = best_model.predict(X_train_scaled)
-    y_test_pred = best_model.predict(X_test_scaled)
+    y_train_pred = best_pipeline.predict(X_train)
+    y_test_pred = best_pipeline.predict(X_test)
+    best_params = {
+        parameter.removeprefix("model__"): value
+        for parameter, value in grid_search.best_params_.items()
+    }
 
     metadata = {
-        "best_params": grid_search.best_params_,
+        "best_params": best_params,
         "best_cv_mse": float(-grid_search.best_score_),
         "cv": cv,
         "scoring": "neg_mean_squared_error",
+        "split_strategy": "random",
+        "test_size": test_size,
+        "random_state": random_state,
+        "training_rows": len(X_train),
+        "test_rows": len(X_test),
         "train_metrics": regression_metrics(y_train, y_train_pred),
         "test_metrics": regression_metrics(y_test, y_test_pred),
     }
     predictions = pd.DataFrame(
         {
+            "sample_index": y_test.index.to_numpy(),
             "y_true": y_test.to_numpy(),
             "y_pred": y_test_pred,
         }
     )
     cv_results = pd.DataFrame(grid_search.cv_results_)
-    return best_model, scaler, metadata["test_metrics"], predictions, metadata, cv_results
+    return best_pipeline, metadata["test_metrics"], predictions, metadata, cv_results
 
 
 def write_json(path: Path, payload: dict) -> None:

@@ -8,9 +8,6 @@ from sklearn.ensemble import IsolationForest
 from sklearn.impute import KNNImputer
 
 
-MISSING_MARKERS = ("bdl", "nd", " ")
-
-
 @dataclass(frozen=True)
 class OutlierReport:
     column: str
@@ -35,8 +32,7 @@ def coerce_detection_limit(value):
 
 
 def clean_numeric_frame(df: pd.DataFrame) -> pd.DataFrame:
-    cleaned = df.replace(list(MISSING_MARKERS), np.nan)
-    return cleaned.apply(lambda column: column.map(coerce_detection_limit))
+    return df.apply(lambda column: column.map(coerce_detection_limit))
 
 
 def set_outliers_to_nan(
