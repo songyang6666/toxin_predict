@@ -3,15 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
+from time import perf_counter
 
 import numpy as np
 import pandas as pd
+from joblib import parallel_backend
+from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
 from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import GridSearchCV, GroupKFold
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import PolynomialFeatures
 from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVR
 
 from ml_toxin_predict.datasets import (
     BASE_FEATURES,
@@ -27,6 +34,25 @@ from ml_toxin_predict.workflow import TOXIN_MODEL_FEATURES
 REGRESSION_METRICS = ("mae", "rmse", "r2")
 EVENT_METRICS = ("pod", "far", "csi")
 SUMMARY_METRICS = REGRESSION_METRICS + EVENT_METRICS
+SUPPORTED_MODELS = (
+    "knn",
+    "linear",
+    "polynomial",
+    "random_forest",
+    "xgboost",
+    "ann",
+    "svm",
+    "extra_trees",
+)
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    name: str
+    label: str
+    pipeline: Pipeline
+    param_grid: dict[str, list]
+    clip_nonnegative: bool = True
 
 
 @dataclass(frozen=True)
@@ -227,17 +253,149 @@ def seasonal_climatology_predictions(
     return np.asarray(predictions)
 
 
-def make_knn_pipeline() -> Pipeline:
-    return Pipeline(
-        [
-            ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
-            ("scaler", StandardScaler()),
-            ("model", KNeighborsRegressor()),
-        ]
+def make_model_spec(
+    model_name: str,
+    *,
+    random_state: int = 42,
+    model_n_jobs: int = 1,
+) -> ModelSpec:
+    imputer = SimpleImputer(strategy="median", keep_empty_features=True)
+    scaled_steps = [("imputer", imputer), ("scaler", StandardScaler())]
+
+    if model_name == "knn":
+        return ModelSpec(
+            name=model_name,
+            label="KNN",
+            pipeline=Pipeline([*scaled_steps, ("model", KNeighborsRegressor())]),
+            param_grid=knn_param_grid(),
+        )
+    if model_name == "linear":
+        return ModelSpec(
+            name=model_name,
+            label="Linear Regression",
+            pipeline=Pipeline([*scaled_steps, ("model", LinearRegression())]),
+            param_grid={},
+        )
+    if model_name == "polynomial":
+        return ModelSpec(
+            name=model_name,
+            label="Polynomial Regression",
+            pipeline=Pipeline(
+                [
+                    ("imputer", imputer),
+                    ("polynomial", PolynomialFeatures(degree=2, include_bias=False)),
+                    ("scaler", StandardScaler()),
+                    ("model", Ridge(max_iter=5000)),
+                ]
+            ),
+            param_grid={"alpha": [1.0, 10.0]},
+        )
+    if model_name == "random_forest":
+        return ModelSpec(
+            name=model_name,
+            label="Random Forest",
+            pipeline=Pipeline(
+                [
+                    ("imputer", imputer),
+                    (
+                        "model",
+                        RandomForestRegressor(
+                            n_estimators=200,
+                            min_samples_leaf=2,
+                            random_state=random_state,
+                            n_jobs=model_n_jobs,
+                        ),
+                    ),
+                ]
+            ),
+            param_grid={"max_depth": [None, 8]},
+        )
+    if model_name == "xgboost":
+        try:
+            from xgboost import XGBRegressor
+        except ImportError as exc:
+            raise ImportError(
+                "XGBoost is required for model='xgboost'. Install the project dependencies."
+            ) from exc
+
+        return ModelSpec(
+            name=model_name,
+            label="XGBoost",
+            pipeline=Pipeline(
+                [
+                    ("imputer", imputer),
+                    (
+                        "model",
+                        XGBRegressor(
+                            objective="reg:squarederror",
+                            tree_method="hist",
+                            n_estimators=250,
+                            learning_rate=0.05,
+                            subsample=0.8,
+                            colsample_bytree=0.8,
+                            reg_lambda=1.0,
+                            random_state=random_state,
+                            n_jobs=model_n_jobs,
+                        ),
+                    ),
+                ]
+            ),
+            param_grid={"max_depth": [2, 4]},
+        )
+    if model_name == "ann":
+        return ModelSpec(
+            name=model_name,
+            label="ANN (MLP)",
+            pipeline=Pipeline(
+                [
+                    *scaled_steps,
+                    (
+                        "model",
+                        MLPRegressor(
+                            early_stopping=True,
+                            max_iter=1000,
+                            learning_rate_init=0.001,
+                            random_state=random_state,
+                        ),
+                    ),
+                ]
+            ),
+            param_grid={"hidden_layer_sizes": [(32,), (64, 32)]},
+        )
+    if model_name == "svm":
+        return ModelSpec(
+            name=model_name,
+            label="SVM (RBF SVR)",
+            pipeline=Pipeline([*scaled_steps, ("model", SVR(kernel="rbf"))]),
+            param_grid={"C": [1.0, 10.0, 100.0]},
+        )
+    if model_name == "extra_trees":
+        return ModelSpec(
+            name=model_name,
+            label="Extra Trees",
+            pipeline=Pipeline(
+                [
+                    ("imputer", imputer),
+                    (
+                        "model",
+                        ExtraTreesRegressor(
+                            n_estimators=200,
+                            min_samples_leaf=2,
+                            random_state=random_state,
+                            n_jobs=model_n_jobs,
+                        ),
+                    ),
+                ]
+            ),
+            param_grid={"max_features": ["sqrt", 1.0]},
+        )
+    raise ValueError(
+        f"Unknown model {model_name!r}. Choose from: {', '.join(SUPPORTED_MODELS)}"
     )
 
 
-def fit_blocked_knn(
+def fit_blocked_model(
+    spec: ModelSpec,
     X_train: pd.DataFrame,
     y_train: pd.Series,
     inner_groups: pd.Series,
@@ -246,22 +404,34 @@ def fit_blocked_knn(
     n_jobs: int = 1,
     verbose: int = 0,
 ) -> tuple[Pipeline, dict[str, object]]:
+    if not spec.param_grid:
+        spec.pipeline.fit(X_train, y_train)
+        return spec.pipeline, {
+            "best_params": {},
+            "best_inner_cv_rmse": np.nan,
+            "inner_cv_splits": 0,
+        }
+
     unique_groups = inner_groups.nunique()
     if unique_groups < 2:
         raise ValueError("At least two training groups are required for blocked tuning")
     n_splits = min(inner_cv, unique_groups)
     grid = GridSearchCV(
-        estimator=make_knn_pipeline(),
+        estimator=spec.pipeline,
         param_grid={
             f"model__{parameter}": values
-            for parameter, values in knn_param_grid().items()
+            for parameter, values in spec.param_grid.items()
         },
         cv=GroupKFold(n_splits=n_splits),
         scoring="neg_mean_squared_error",
         n_jobs=n_jobs,
         verbose=verbose,
     )
-    grid.fit(X_train, y_train, groups=inner_groups)
+    if n_jobs == 1:
+        grid.fit(X_train, y_train, groups=inner_groups)
+    else:
+        with parallel_backend("threading", n_jobs=n_jobs):
+            grid.fit(X_train, y_train, groups=inner_groups)
     details = {
         "best_params": {
             key.removeprefix("model__"): value
@@ -279,8 +449,10 @@ def evaluate_blocked_validation(
     metadata: pd.DataFrame,
     *,
     split_types: tuple[str, ...] = ("year", "station_year"),
+    model_names: tuple[str, ...] = SUPPORTED_MODELS,
     threshold: float = 1.0,
     inner_cv: int = 5,
+    random_state: int = 42,
     n_jobs: int = 1,
     verbose: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -300,53 +472,91 @@ def evaluate_blocked_validation(
                 "target_year" if split_type == "year" else "station_year"
             )
 
-            model, model_details = fit_blocked_knn(
-                X_train,
-                y_train,
-                metadata_train[inner_group_column],
-                inner_cv=inner_cv,
-                n_jobs=n_jobs,
-                verbose=verbose,
-            )
-            methods = {
-                "knn": model.predict(X_test),
-                "persistence": X_test["Total microcystin"].to_numpy(),
-                "seasonal_climatology": seasonal_climatology_predictions(
+            evaluations = []
+            for model_name in model_names:
+                spec = make_model_spec(
+                    model_name,
+                    random_state=random_state,
+                    model_n_jobs=1,
+                )
+                fit_start = perf_counter()
+                model, model_details = fit_blocked_model(
+                    spec,
+                    X_train,
                     y_train,
-                    metadata_train,
-                    metadata_test,
-                ),
-            }
+                    metadata_train[inner_group_column],
+                    inner_cv=inner_cv,
+                    n_jobs=n_jobs,
+                    verbose=verbose,
+                )
+                prediction = model.predict(X_test)
+                if spec.clip_nonnegative:
+                    prediction = np.maximum(prediction, 0.0)
+                evaluations.append(
+                    {
+                        "method": spec.name,
+                        "model": spec.label,
+                        "baseline": "none",
+                        "prediction": prediction,
+                        "fit_seconds": perf_counter() - fit_start,
+                        **model_details,
+                    }
+                )
 
-            for method, prediction in methods.items():
+            evaluations.extend(
+                [
+                    {
+                        "method": "persistence",
+                        "model": "none",
+                        "baseline": "persistence",
+                        "prediction": X_test["Total microcystin"].to_numpy(),
+                    },
+                    {
+                        "method": "seasonal_climatology",
+                        "model": "none",
+                        "baseline": "seasonal_climatology",
+                        "prediction": seasonal_climatology_predictions(
+                            y_train,
+                            metadata_train,
+                            metadata_test,
+                        ),
+                    },
+                ]
+            )
+
+            for evaluation in evaluations:
+                prediction = evaluation["prediction"]
                 metrics = regression_and_event_metrics(
                     y_test,
                     prediction,
                     threshold=threshold,
                 )
-                is_model = method == "knn"
+                is_model = evaluation["baseline"] == "none"
                 fold_rows.append(
                     {
                         "horizon_days": horizon_days,
                         "split_type": split_type,
                         "fold": split.fold,
-                        "method": method,
-                        "model": "KNN" if is_model else "none",
-                        "baseline": "none" if is_model else method,
+                        "method": evaluation["method"],
+                        "model": evaluation["model"],
+                        "baseline": evaluation["baseline"],
                         "train_rows": len(X_train),
                         "test_rows": len(X_test),
                         "threshold": threshold,
                         "best_params": (
-                            json.dumps(model_details["best_params"], sort_keys=True)
+                            json.dumps(evaluation["best_params"], sort_keys=True)
                             if is_model
                             else ""
                         ),
                         "best_inner_cv_rmse": (
-                            model_details["best_inner_cv_rmse"] if is_model else np.nan
+                            evaluation["best_inner_cv_rmse"]
+                            if is_model
+                            else np.nan
                         ),
                         "inner_cv_splits": (
-                            model_details["inner_cv_splits"] if is_model else np.nan
+                            evaluation["inner_cv_splits"] if is_model else np.nan
                         ),
+                        "fit_seconds": evaluation.get("fit_seconds", 0.0),
                         **metrics,
                     }
                 )
@@ -354,7 +564,9 @@ def evaluate_blocked_validation(
                 predictions = metadata_test.reset_index(names="sample_index").copy()
                 predictions.insert(0, "split_type", split_type)
                 predictions.insert(1, "fold", split.fold)
-                predictions.insert(2, "method", method)
+                predictions.insert(2, "method", evaluation["method"])
+                predictions.insert(3, "model", evaluation["model"])
+                predictions.insert(4, "baseline", evaluation["baseline"])
                 predictions["y_true"] = y_test.to_numpy()
                 predictions["y_pred"] = prediction
                 prediction_frames.append(predictions)
@@ -385,6 +597,31 @@ def summarize_fold_metrics(fold_metrics: pd.DataFrame) -> pd.DataFrame:
             row[f"{metric}_sd"] = sd
             row[f"{metric}_mean_sd"] = _format_mean_sd(mean, sd)
         rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def summarize_pooled_predictions(
+    predictions: pd.DataFrame,
+    *,
+    threshold: float = 1.0,
+) -> pd.DataFrame:
+    """Calculate supplementary metrics after pooling all held-out blocks."""
+    group_columns = ["split_type", "method", "model", "baseline"]
+    rows = []
+    for keys, group in predictions.groupby(group_columns, sort=False, dropna=False):
+        rows.append(
+            {
+                "horizon_days": int(group["nominal_horizon_days"].iloc[0]),
+                **dict(zip(group_columns, keys, strict=True)),
+                "test_rows": len(group),
+                "threshold": threshold,
+                **regression_and_event_metrics(
+                    group["y_true"],
+                    group["y_pred"],
+                    threshold=threshold,
+                ),
+            }
+        )
     return pd.DataFrame(rows)
 
 

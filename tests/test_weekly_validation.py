@@ -4,10 +4,13 @@ import numpy as np
 import pandas as pd
 
 from ml_toxin_predict.weekly import (
+    SUPPORTED_MODELS,
     iter_blocked_splits,
+    make_model_spec,
     make_weekly_observed_pairs,
     regression_and_event_metrics,
     seasonal_climatology_predictions,
+    summarize_pooled_predictions,
 )
 from ml_toxin_predict.workflow import TOXIN_MODEL_FEATURES
 
@@ -105,3 +108,30 @@ def test_seasonal_climatology_uses_training_data_only():
     )
 
     assert predictions.tolist() == [2.0, 10.0, 14.0 / 3.0]
+
+
+def test_all_comparison_models_have_unique_specs():
+    specs = [make_model_spec(name) for name in SUPPORTED_MODELS]
+
+    assert [spec.name for spec in specs] == list(SUPPORTED_MODELS)
+    assert len({spec.label for spec in specs}) == len(SUPPORTED_MODELS)
+    assert all(spec.pipeline.steps for spec in specs)
+
+
+def test_pooled_metrics_keep_methods_separate():
+    predictions = pd.DataFrame(
+        {
+            "split_type": ["year"] * 4,
+            "method": ["linear", "linear", "persistence", "persistence"],
+            "model": ["Linear Regression", "Linear Regression", "none", "none"],
+            "baseline": ["none", "none", "persistence", "persistence"],
+            "nominal_horizon_days": [7] * 4,
+            "y_true": [0.0, 2.0, 0.0, 2.0],
+            "y_pred": [0.0, 2.0, 2.0, 0.0],
+        }
+    )
+
+    pooled = summarize_pooled_predictions(predictions)
+
+    assert pooled["method"].tolist() == ["linear", "persistence"]
+    assert pooled["mae"].tolist() == [0.0, 2.0]

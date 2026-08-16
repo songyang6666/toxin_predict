@@ -33,7 +33,9 @@ jobs:
           test -f data/outputs/ci_horizon_test/horizon_r2_rmse.png
       - name: Run weekly blocked-validation smoke test
         run: |
-          toxin-predict-weekly --split-types year --inner-cv 2 --verbose 0 \
+          toxin-predict-weekly --split-types year --models knn linear \
+            --inner-cv 2 --verbose 0 \
             --output-dir data/outputs/ci_weekly_test
           test -f data/outputs/ci_weekly_test/weekly_observed_pairs.csv
           test -f data/outputs/ci_weekly_test/summary.txt
+          test -f data/outputs/ci_weekly_test/pooled_metrics.csv

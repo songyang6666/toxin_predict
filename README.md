@@ -120,14 +120,16 @@ evaluates:
 
 - leave-one-target-year-out validation;
 - leave-one-station-year-out validation;
-- KNN with nested group-blocked tuning, fold-local median imputation, and
-  fold-local standardization;
+- KNN, Linear Regression, second-order Polynomial Regression, Random Forest,
+  XGBoost, ANN/MLP, RBF-SVM, and Extra Trees;
+- nested group-blocked tuning with fold-local preprocessing for every model;
 - persistence and training-only seasonal climatology baselines;
 - probability of detection (POD), false alarm ratio (FAR), and critical
   success index (CSI) at the 1 microgram/L total microcystin threshold.
 
 The command writes the observed pairs, fold-level metrics, held-out
-predictions, machine-readable summaries, and a plain-text `mean +/- SD` table
+predictions, machine-readable blocked and pooled summaries, and a plain-text
+`mean +/- SD` table
 to `data/outputs/weekly_blocked_validation/`. See
 `docs/WEEKLY_BLOCKED_VALIDATION.md` for exact definitions.
 

@@ -21,10 +21,26 @@ Two outer validation designs are reported:
 - `year`: leave one complete target year out;
 - `station_year`: leave one complete monitoring-site target-year block out.
 
-KNN hyperparameters are selected inside each outer training set with grouped
-inner cross-validation. Median imputation and standardization are included in
-the scikit-learn Pipeline and are therefore fitted using training-fold data
-only.
+Candidate model hyperparameters are selected inside each outer training set
+with grouped inner cross-validation. Median imputation and, where appropriate,
+standardization are included in the scikit-learn Pipeline and are therefore
+fitted using training-fold data only. Predictions are clipped at zero because
+negative concentrations are not physically meaningful.
+
+## Candidate models
+
+- K-nearest neighbors (KNN)
+- Linear Regression
+- second-order Polynomial Regression with Ridge regularization
+- Random Forest
+- Extreme Gradient Boosting (XGBoost)
+- artificial neural network implemented with `MLPRegressor`
+- support vector machine implemented with RBF-kernel `SVR`
+- Extra Trees, included as an additional small-tabular-data ensemble
+
+The search grids are deliberately compact because the observed-pair dataset is
+small. Linear Regression has no tuned hyperparameters. All stochastic models
+use a fixed random seed.
 
 ## Baselines
 
@@ -43,7 +59,9 @@ An event is total microcystin greater than or equal to 1 microgram/L.
 
 Undefined fold-level ratios are stored as missing values. Summary values are
 the unweighted mean and sample standard deviation across valid held-out blocks;
-the CSV also records the number of valid folds for every metric.
+the CSV also records the number of valid folds for every metric. Supplementary
+pooled metrics are written separately and do not replace the requested
+block-level `mean +/- SD` results.
 
 ## Reproduction
 
@@ -52,5 +70,6 @@ toxin-predict-weekly \
   --horizon-days 7 \
   --tolerance-days 2 \
   --split-types year station_year \
+  --models knn linear polynomial random_forest xgboost ann svm extra_trees \
   --threshold 1.0
 ```

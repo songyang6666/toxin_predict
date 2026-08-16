@@ -8,9 +8,11 @@ from ml_toxin_predict.modeling import write_json
 from ml_toxin_predict.weekly import (
     EVENT_METRICS,
     REGRESSION_METRICS,
+    SUPPORTED_MODELS,
     build_weekly_dataset,
     evaluate_blocked_validation,
     summarize_fold_metrics,
+    summarize_pooled_predictions,
 )
 
 
@@ -31,8 +33,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         nargs="+",
         default=["year", "station_year"],
     )
+    parser.add_argument(
+        "--models",
+        choices=SUPPORTED_MODELS,
+        nargs="+",
+        default=list(SUPPORTED_MODELS),
+    )
     parser.add_argument("--threshold", type=float, default=1.0)
     parser.add_argument("--inner-cv", type=int, default=5)
+    parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--n-jobs", type=int, default=1)
     parser.add_argument("--verbose", type=int, default=0)
     parser.add_argument(
@@ -85,18 +94,25 @@ def run_validation(args: argparse.Namespace):
         y,
         metadata,
         split_types=tuple(dict.fromkeys(args.split_types)),
+        model_names=tuple(dict.fromkeys(args.models)),
         threshold=args.threshold,
         inner_cv=args.inner_cv,
+        random_state=args.random_state,
         n_jobs=args.n_jobs,
         verbose=args.verbose,
     )
     summary = summarize_fold_metrics(fold_metrics)
+    pooled_metrics = summarize_pooled_predictions(
+        predictions,
+        threshold=args.threshold,
+    )
     summary_text = render_summary_text(summary)
 
     pairs.to_csv(output_dir / "weekly_observed_pairs.csv", index=False)
     fold_metrics.to_csv(output_dir / "fold_metrics.csv", index=False)
     predictions.to_csv(output_dir / "predictions.csv", index=False)
     summary.to_csv(output_dir / "summary.csv", index=False)
+    pooled_metrics.to_csv(output_dir / "pooled_metrics.csv", index=False)
     (output_dir / "summary.txt").write_text(summary_text + "\n", encoding="utf-8")
     write_json(
         output_dir / "summary.json",
@@ -116,7 +132,11 @@ def run_validation(args: argparse.Namespace):
                 "year": "leave one target year out",
                 "station_year": "leave one monitoring-site target-year block out",
             },
-            "model": "nested blocked-CV KNN with fold-local median imputation and scaling",
+            "models": list(dict.fromkeys(args.models)),
+            "model_selection": (
+                "nested group-blocked CV with fold-local preprocessing and "
+                "nonnegative predictions"
+            ),
             "baselines": {
                 "persistence": "current observed total microcystin",
                 "seasonal_climatology": (
@@ -132,6 +152,9 @@ def run_validation(args: argparse.Namespace):
             "aggregation": "unweighted mean and sample SD across held-out blocks",
             "results": summary.astype(object)
             .where(summary.notna(), None)
+            .to_dict(orient="records"),
+            "supplementary_pooled_results": pooled_metrics.astype(object)
+            .where(pooled_metrics.notna(), None)
             .to_dict(orient="records"),
         },
     )
