@@ -9,5 +9,7 @@ __all__ = [
     "modeling",
     "predicting",
     "preprocessing",
+    "weekly",
+    "weekly_validation",
     "workflow",
 ]

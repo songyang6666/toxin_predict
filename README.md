@@ -105,6 +105,32 @@ interpolation creates temporally related samples, these scores should be
 reported with that design choice clearly stated and interpreted alongside an
 appropriate temporal sensitivity analysis.
 
+## Reviewer-requested weekly validation
+
+Run the stricter weekly sensitivity analysis with:
+
+```bash
+toxin-predict-weekly
+```
+
+This workflow does not interpolate observations. It pairs consecutive samples
+from the same monitoring site when their observed interval is 5-9 days, records
+the actual interval, and treats the pairs as nominal 7-day predictions. It then
+evaluates:
+
+- leave-one-target-year-out validation;
+- leave-one-station-year-out validation;
+- KNN with nested group-blocked tuning, fold-local median imputation, and
+  fold-local standardization;
+- persistence and training-only seasonal climatology baselines;
+- probability of detection (POD), false alarm ratio (FAR), and critical
+  success index (CSI) at the 1 microgram/L total microcystin threshold.
+
+The command writes the observed pairs, fold-level metrics, held-out
+predictions, machine-readable summaries, and a plain-text `mean +/- SD` table
+to `data/outputs/weekly_blocked_validation/`. See
+`docs/WEEKLY_BLOCKED_VALIDATION.md` for exact definitions.
+
 ## Optional processed data and interpretation outputs
 
 ```bash

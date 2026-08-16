@@ -20,6 +20,7 @@ dev = [
 [project.scripts]
 toxin-predict = "ml_toxin_predict.cli:main"
 toxin-predict-horizons = "ml_toxin_predict.horizons:main"
+toxin-predict-weekly = "ml_toxin_predict.weekly_validation:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

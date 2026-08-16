@@ -31,7 +31,8 @@ available from the NOAA National Centers for Environmental Information at
 https://doi.org/10.25921/11da-3x54. The analysis was conducted using Python,
 scikit-learn, and SHAP. Custom scripts for preprocessing, model training and
 evaluation, prediction-horizon comparison, figure generation, and SHAP-based
-interpretation are available to editors and reviewers during peer review
+interpretation, together with non-interpolated blocked-validation and baseline
+comparisons, are available to editors and reviewers during peer review
 through a private GitHub repository:
 https://github.com/songyang6666/toxin_predict. Upon acceptance, the repository
 will be made public and archived in Zenodo or another trusted repository with a
